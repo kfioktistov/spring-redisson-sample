@@ -1,0 +1,165 @@
+version: 2
+
+openjdk: &openjdk
+  docker:
+    - image: circleci/openjdk:8-jdk-browsers
+  working_directory: ~/redisson-sample
+
+terraform: &terraform
+  docker:
+    - image: hashicorp/terraform:0.11.7
+  working_directory: ~/redisson-sample/infra
+
+build: &build
+  name: Build
+  command: mvn install # build all maven modules and install to local repo2
+
+goOffline: &goOffline
+  name: Go offline mode
+  command: mvn dependency:go-offline
+
+dockerPush: &dockerPush
+  name: Push docker image
+  command: |
+    docker login -u $TF_VAR_docker_username -p $TF_VAR_docker_password
+    TAG=ictcontact/redisson-sample:v2.0.$CIRCLE_BUILD_NUM
+    docker build -t $TAG .
+    docker push $TAG
+
+restoreCache: &restoreCache
+  key: redisson-sample-{{ checksum "pom.xml" }}
+
+saveCache: &saveCache
+  paths:
+    - ~/.m2
+  key: redisson-sample-{{ checksum "pom.xml" }}
+
+storeTestResults: &storeTestResults
+  path: target/surefire-reports
+
+storeArtifacts: &storeArtifacts
+  path: web/target/redisson-sample.jar
+  destination: redisson-sample.jar
+
+# terraform
+tfGetDeps: &tfGetDeps
+  name: install packages
+  command: apk update && apk add unzip jq bash
+
+tfInit: &tfInit
+  name: terraform init
+  command: terraform init -input=false
+
+tfValidate: &tfValidate
+  name: Validate Terraform configurations
+  command: find . -type f -name "*.tf" -exec dirname {} \;|sort -u | while read m; do (terraform validate -check-variables=false "$m" && echo "√ $m") || exit 1 ; done
+
+tfFormat: &tfFormat
+  name: Check if Terraform configurations are properly formatted
+  command: |
+    if [[ -n "$(terraform fmt -write=false)" ]]
+        then echo "Some terraform files need be formatted, run 'terraform fmt' to fix"
+        exit 1
+    fi
+
+tfInstallHeptio: &tfInstallHeptio
+  name: Install heptio
+  command: |
+    curl -L "https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.3.0/heptio-authenticator-aws_0.3.0_linux_amd64" -o "/usr/local/bin/heptio-authenticator-aws"
+    chmod +x /usr/local/bin/heptio-authenticator-aws
+
+tfPlan: &tfPlan
+  name: Terraform plan
+  command: terraform plan -var DOCKER_IMG_TAG=v2.0.$CIRCLE_PREVIOUS_BUILD_NUM
+
+tfDestroy: &tfDestroy
+  name: Terraform destroy
+  command: terraform destroy -var DOCKER_IMG_TAG=v2.0.$CIRCLE_PREVIOUS_BUILD_NUM -auto-approve
+  no_output_timeout: 30m
+
+tfApply: &tfApply
+  name: Terraform apply
+  command: terraform apply -var DOCKER_IMG_TAG=v2.0.$CIRCLE_PREVIOUS_BUILD_NUM -auto-approve
+  no_output_timeout: 30m
+  when: always # apply should be run even if destroy fails
+
+# TODO SNYK with Pro account
+
+jobs:
+
+  validate_code:
+    <<: *openjdk
+    steps:
+      - checkout
+      - restore_cache: *restoreCache
+      - run: *build
+      - run: *goOffline
+      - save_cache: *saveCache
+      - store_test_results: *storeTestResults
+      - store_artifacts: *storeArtifacts
+
+  validate_infra:
+    <<: *terraform
+    steps:
+      - checkout:
+          path: ~/redisson-sample
+      - run: *tfGetDeps
+      - run: *tfInit
+      - run: *tfValidate
+      - run: *tfFormat
+      - run: *tfInstallHeptio
+      - run: *tfPlan
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  push_docker_image:
+    <<: *openjdk
+    steps:
+      - checkout
+      - restore_cache: *restoreCache
+      - run: *build
+      - save_cache: *saveCache
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run: *dockerPush
+
+  deploy_infra:
+    <<: *terraform
+    steps:
+      - checkout:
+          path: ~/redisson-sample
+      - run: *tfGetDeps
+      - run: *tfInit
+      - run: *tfInstallHeptio
+      - run: *tfDestroy
+      - run: *tfApply
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+workflows:
+  version: 2
+  redisson-sample_workflow:
+    jobs:
+      - validate_code:
+          context: AWS_PROD
+      - validate_infra:
+          context: AWS_PROD
+      - push_docker_image:
+          context: AWS_PROD
+          requires:
+            - validate_code
+            - validate_infra
+          filters:
+            branches:
+              only: develop
+      - deploy_infra:
+          context: AWS_PROD
+          requires:
+            - push_docker_image
+          filters:
+            branches:
+              only: develop

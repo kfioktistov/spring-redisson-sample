@@ -1,0 +1,27 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: redisson-sample-deploy
+  labels:
+    app: redisson-sample
+    component: redisson-sample-deploy
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: redisson-sample
+        component: redisson-sample-deploy
+        enabled: "true"
+    spec:
+#      nodeSelector:
+#        is_compute: "true"
+      imagePullSecrets:
+        - name: regcred
+      containers:
+      - name: redisson-sample
+        image: redisson-sample
+        imagePullPolicy: Never
+        ports:
+        - name: http
+          containerPort: 80
