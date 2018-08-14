@@ -7,4 +7,4 @@ COPY ./target/redisson-sample.jar .
 
 EXPOSE 80
 
-CMD java -jar -Dspring.profiles.active=dev redisson-sample.jar --server.port=80
+CMD java -jar redisson-sample.jar --server.port=80
