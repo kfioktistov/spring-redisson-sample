@@ -9,7 +9,7 @@ terraform {
 }
 
 module "microservice" {
-  source           = "git::ssh://git@github.com/PB-Digital/infra-module-ms?ref=v0.0.33"
+  source           = "git::ssh://git@github.com/PB-Digital/infra-module-ms?ref=v0.0.35"
   service_name     = "redisson-sample"
   service_version  = "1"
   service_image    = "ictcontact/redisson-sample:${var.DOCKER_IMG_TAG}"                     // TODO - inject build versions here

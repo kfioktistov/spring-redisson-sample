@@ -8,7 +8,9 @@ server:
 redis:
   server:
     urls: >
-      http://test-0001-001.7uhivk.0001.use1.cache.amazonaws.com:6379,
-      http://test-0001-002.7uhivk.0001.use1.cache.amazonaws.com:6379,
-      http://test-0001-003.7uhivk.0001.use1.cache.amazonaws.com:6379,
-      http://test-0001-004.7uhivk.0001.use1.cache.amazonaws.com:6379
+      http://redis-cluster-0001-001.7uhivk.0001.use1.cache.amazonaws.com:6379,
+      http://redis-cluster-0001-002.7uhivk.0001.use1.cache.amazonaws.com:6379,
+      http://redis-cluster-0002-001.7uhivk.0001.use1.cache.amazonaws.com:6379,
+      http://redis-cluster-0002-002.7uhivk.0001.use1.cache.amazonaws.com:6379,
+      http://redis-cluster-0003-001.7uhivk.0001.use1.cache.amazonaws.com:6379,
+      http://redis-cluster-0003-002.7uhivk.0001.use1.cache.amazonaws.com:6379
